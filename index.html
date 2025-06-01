@@ -568,11 +568,13 @@
                 this.calculateVisibleCells();
                 window.addEventListener('resize', () => this.calculateVisibleCells());
                 
-                // 初期シートを作成
-                this.addSheet('Sheet1');
-                
-                // 保存データの読み込み
+                // 保存データの読み込みを先に実行
                 this.loadFromStorage();
+                
+                // データがない場合のみ初期シートを作成
+                if (this.sheets.length === 0) {
+                    this.addSheet('Sheet1');
+                }
             }
 
             get activeSheet() {
@@ -910,6 +912,8 @@
                         if (sheet.selectedCell) {
                             document.getElementById('formulaInput').value = input.value;
                         }
+                        // 編集後に自動保存
+                        this.saveToStorage();
                     }
                     this.editingCell = null;
                     this.render();
@@ -1049,50 +1053,89 @@
             }
 
             saveToStorage() {
-                const data = {
-                    sheets: this.sheets.map(sheet => ({
-                        name: sheet.name,
-                        data: sheet.data,
-                        rows: sheet.rows,
-                        cols: sheet.cols,
-                        history: sheet.history,
-                        historyIndex: sheet.historyIndex
-                    })),
-                    activeSheetIndex: this.activeSheetIndex,
-                    columnWidths: this.columnWidths,
-                    rowHeights: this.rowHeights,
-                    lastSaved: Date.now()
-                };
-                
-                // localStorageは使えないので、メモリに保存
-                this.savedData = JSON.stringify(data);
-                document.getElementById('status').textContent = `保存しました (${new Date().toLocaleTimeString()})`;
+                try {
+                    const data = {
+                        sheets: this.sheets.map(sheet => ({
+                            name: sheet.name,
+                            data: sheet.data,
+                            rows: sheet.rows,
+                            cols: sheet.cols,
+                            history: sheet.history,
+                            historyIndex: sheet.historyIndex
+                        })),
+                        activeSheetIndex: this.activeSheetIndex,
+                        columnWidths: this.columnWidths,
+                        rowHeights: this.rowHeights,
+                        lastSaved: Date.now()
+                    };
+                    
+                    // ブラウザのローカルストレージに保存（GitHub Pagesでも動作）
+                    const key = 'spreadsheet_data_' + window.location.pathname;
+                    const jsonData = JSON.stringify(data);
+                    
+                    // データサイズチェック（5MB制限）
+                    if (jsonData.length > 5 * 1024 * 1024) {
+                        console.warn('データサイズが大きすぎます。一部のデータが保存されない可能性があります。');
+                    }
+                    
+                    try {
+                        localStorage.setItem(key, jsonData);
+                        document.getElementById('status').textContent = `保存しました (${new Date().toLocaleTimeString()})`;
+                    } catch (e) {
+                        // ストレージ容量エラーの処理
+                        console.error('保存エラー:', e);
+                        document.getElementById('status').textContent = '保存に失敗しました（容量不足）';
+                    }
+                } catch (error) {
+                    console.error('保存処理エラー:', error);
+                    document.getElementById('status').textContent = '保存エラーが発生しました';
+                }
             }
 
             loadFromStorage() {
-                // メモリから読み込み（実際のアプリではlocalStorageやサーバーを使用）
-                if (this.savedData) {
-                    try {
-                        const data = JSON.parse(this.savedData);
-                        this.sheets = data.sheets.map(sheetData => {
+                try {
+                    const key = 'spreadsheet_data_' + window.location.pathname;
+                    const savedData = localStorage.getItem(key);
+                    
+                    if (savedData) {
+                        const data = JSON.parse(savedData);
+                        
+                        // 既存のシートをクリア
+                        this.sheets = [];
+                        
+                        // 保存されたシートを復元
+                        data.sheets.forEach(sheetData => {
                             const sheet = new Sheet(sheetData.name);
-                            sheet.data = sheetData.data;
-                            sheet.rows = sheetData.rows;
-                            sheet.cols = sheetData.cols;
+                            sheet.data = sheetData.data || {};
+                            sheet.rows = sheetData.rows || 100;
+                            sheet.cols = sheetData.cols || 26;
                             sheet.history = sheetData.history || [];
                             sheet.historyIndex = sheetData.historyIndex || -1;
-                            return sheet;
+                            this.sheets.push(sheet);
                         });
-                        this.activeSheetIndex = data.activeSheetIndex;
+                        
+                        this.activeSheetIndex = data.activeSheetIndex || 0;
                         this.columnWidths = data.columnWidths || {};
                         this.rowHeights = data.rowHeights || {};
+                        
+                        if (this.sheets.length === 0) {
+                            // シートがない場合は新規作成
+                            this.addSheet('Sheet1');
+                        }
                         
                         this.renderSheetTabs();
                         this.updateGridSize();
                         this.render();
+                        this.updateInfo();
+                        
                         document.getElementById('status').textContent = 'データを読み込みました';
-                    } catch (e) {
-                        console.error('データの読み込みに失敗しました', e);
+                    }
+                } catch (error) {
+                    console.error('データの読み込みエラー:', error);
+                    document.getElementById('status').textContent = 'データ読み込みエラー';
+                    // エラーが発生した場合は新規シートを作成
+                    if (this.sheets.length === 0) {
+                        this.addSheet('Sheet1');
                     }
                 }
             }
@@ -1252,6 +1295,7 @@
                 });
                 
                 this.render();
+                this.saveToStorage(); // ペースト後に保存
                 document.getElementById('status').textContent = `${rows.length}行のデータを貼り付けました`;
             }
         }
