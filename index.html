@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高性能スプレッドシート</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+        }
+
+        .header {
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: glow 3s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .jump-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 5px 10px;
+        }
+
+        .jump-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #e0e0e0;
+            width: 80px;
+        }
+
+        .info {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            color: #a0a0a0;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .info-value {
+            color: #60a5fa;
+            font-weight: 500;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            background: rgba(96, 165, 250, 0.2);
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            border-radius: 6px;
+            color: #60a5fa;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+        }
+
+        .btn:hover {
+            background: rgba(96, 165, 250, 0.3);
+            border-color: rgba(96, 165, 250, 0.5);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(96, 165, 250, 0.2);
+        }
+
+        .sheet-tabs {
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            gap: 5px;
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(96, 165, 250, 0.3) transparent;
+        }
+
+        .sheet-tab {
+            padding: 8px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+            font-size: 14px;
+            position: relative;
+        }
+
+        .sheet-tab:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .sheet-tab.active {
+            background: rgba(96, 165, 250, 0.2);
+            border-color: rgba(96, 165, 250, 0.3);
+            color: #60a5fa;
+        }
+
+        .sheet-tab-close {
+            margin-left: 10px;
+            opacity: 0.5;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .sheet-tab-close:hover {
+            opacity: 1;
+        }
+
+        .add-sheet-btn {
+            padding: 6px 12px;
+            background: rgba(167, 139, 250, 0.2);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            border-radius: 6px;
+            color: #a78bfa;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .add-sheet-btn:hover {
+            background: rgba(167, 139, 250, 0.3);
+            transform: scale(1.05);
+        }
+
+        .spreadsheet-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            margin: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .spreadsheet {
+            position: absolute;
+            inset: 0;
+            overflow: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(96, 165, 250, 0.3) transparent;
+        }
+
+        .spreadsheet::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        .spreadsheet::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .spreadsheet::-webkit-scrollbar-thumb {
+            background: rgba(96, 165, 250, 0.3);
+            border-radius: 6px;
+        }
+
+        .spreadsheet::-webkit-scrollbar-thumb:hover {
+            background: rgba(96, 165, 250, 0.5);
+        }
+
+        .grid {
+            display: grid;
+            position: relative;
+            min-width: 100%;
+        }
+
+        .cell {
+            padding: 8px 12px;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.2s;
+            cursor: cell;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .resize-handle-col {
+            position: absolute;
+            right: -3px;
+            top: 0;
+            width: 6px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 15;
+        }
+
+        .resize-handle-row {
+            position: absolute;
+            bottom: -3px;
+            left: 0;
+            height: 6px;
+            width: 100%;
+            cursor: row-resize;
+            z-index: 15;
+        }
+
+        .resize-handle-col:hover, .resize-handle-row:hover {
+            background: rgba(96, 165, 250, 0.3);
+        }
+
+        .cell:hover {
+            background: rgba(96, 165, 250, 0.1);
+        }
+
+        .cell.header {
+            background: rgba(255, 255, 255, 0.05);
+            font-weight: 600;
+            color: #a78bfa;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+        }
+
+        .cell.row-header {
+            background: rgba(255, 255, 255, 0.05);
+            font-weight: 600;
+            color: #60a5fa;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+
+        .cell.selected {
+            background: rgba(96, 165, 250, 0.2);
+            border: 2px solid #60a5fa;
+            padding: 6px 10px;
+        }
+
+        .cell.editing {
+            background: rgba(167, 139, 250, 0.2);
+            border: 2px solid #a78bfa;
+            padding: 6px 10px;
+        }
+
+        .cell-input {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: inherit;
+            font: inherit;
+        }
+
+        .loading {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(96, 165, 250, 0.2);
+            border-top-color: #60a5fa;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-bar {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #808080;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 5px 10px;
+        }
+
+        .search-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #e0e0e0;
+            width: 200px;
+        }
+
+        .formula-bar {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .formula-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 6px 12px;
+            color: #e0e0e0;
+            outline: none;
+            font-family: 'Consolas', monospace;
+        }
+
+        .formula-input:focus {
+            border-color: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">高性能スプレッドシート</h1>
+            <div class="controls">
+                <div class="jump-box">
+                    <span>📍</span>
+                    <input type="text" class="jump-input" placeholder="行番号..." id="jumpInput">
+                    <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="jumpToRow()">ジャンプ</button>
+                </div>
+                <div class="search-box">
+                    <span>🔍</span>
+                    <input type="text" class="search-input" placeholder="検索..." id="searchInput">
+                </div>
+                <button class="btn" onclick="generateData(10000)">1万件生成</button>
+                <button class="btn" onclick="generateData(50000)">5万件生成</button>
+                <button class="btn" onclick="generateData(100000)">10万件生成</button>
+                <button class="btn" onclick="clearData()">クリア</button>
+                <button class="btn" onclick="importData()">データ取込</button>
+                <input type="file" id="fileInput" style="display: none;" accept=".json,.csv" onchange="handleFileSelect(event)">`
+            </div>
+            <div class="info">
+                <div class="info-item">
+                    <span>行数:</span>
+                    <span class="info-value" id="rowCount">0</span>
+                </div>
+                <div class="info-item">
+                    <span>列数:</span>
+                    <span class="info-value" id="colCount">0</span>
+                </div>
+                <div class="info-item">
+                    <span>総セル数:</span>
+                    <span class="info-value" id="cellCount">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="sheet-tabs" id="sheetTabs">
+            <button class="add-sheet-btn" onclick="addNewSheet()">+ 新規シート</button>
+        </div>
+        
+        <div class="formula-bar">
+            <span id="selectedCell">A1</span>
+            <input type="text" class="formula-input" id="formulaInput" placeholder="値または数式を入力...">
+        </div>
+
+        <div class="spreadsheet-container">
+            <div class="loading" id="loading" style="display: none;">
+                <div class="loading-spinner"></div>
+            </div>
+            <div class="spreadsheet" id="spreadsheet">
+                <div class="grid" id="grid"></div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <span id="status">準備完了</span>
+            <span style="color: #60a5fa;">Ctrl+Z: 元に戻す | Ctrl+Y: やり直し | Ctrl+S: 保存</span>
+            <span id="selection">選択: なし</span>
+        </div>
+    </div>
+
+    <script>
+        class Sheet {
+            constructor(name) {
+                this.name = name;
+                this.data = {};
+                this.rows = 100;
+                this.cols = 26;
+                this.scrollTop = 0;
+                this.scrollLeft = 0;
+                this.selectedCell = null;
+                this.history = [];
+                this.historyIndex = -1;
+                this.lastSaved = Date.now();
+            }
+
+            getCellKey(row, col) {
+                return `${row},${col}`;
+            }
+
+            getCellValue(row, col) {
+                return this.data[this.getCellKey(row, col)] || '';
+            }
+
+            setCellValue(row, col, value, addToHistory = true) {
+                const key = this.getCellKey(row, col);
+                const oldValue = this.data[key] || '';
+                
+                if (oldValue === value) return;
+                
+                if (addToHistory) {
+                    this.addToHistory({
+                        type: 'cell',
+                        row,
+                        col,
+                        oldValue,
+                        newValue: value
+                    });
+                }
+                
+                if (value) {
+                    this.data[key] = value;
+                } else {
+                    delete this.data[key];
+                }
+                
+                this.lastSaved = Date.now();
+            }
+
+            addToHistory(action) {
+                // 現在の位置より後の履歴を削除
+                this.history = this.history.slice(0, this.historyIndex + 1);
+                this.history.push(action);
+                this.historyIndex++;
+                
+                // 履歴の上限を設定（100個まで）
+                if (this.history.length > 100) {
+                    this.history.shift();
+                    this.historyIndex--;
+                }
+            }
+
+            undo() {
+                if (this.historyIndex < 0) return null;
+                
+                const action = this.history[this.historyIndex];
+                this.historyIndex--;
+                
+                if (action.type === 'cell') {
+                    this.setCellValue(action.row, action.col, action.oldValue, false);
+                }
+                
+                return action;
+            }
+
+            redo() {
+                if (this.historyIndex >= this.history.length - 1) return null;
+                
+                this.historyIndex++;
+                const action = this.history[this.historyIndex];
+                
+                if (action.type === 'cell') {
+                    this.setCellValue(action.row, action.col, action.newValue, false);
+                }
+                
+                return action;
+            }
+        }
+
+        class VirtualSpreadsheet {
+            constructor(container) {
+                this.container = container;
+                this.grid = container.querySelector('#grid');
+                this.sheets = [];
+                this.activeSheetIndex = -1;
+                this.cellHeight = 35;
+                this.cellWidth = 120;
+                this.columnWidths = {};
+                this.rowHeights = {};
+                this.visibleRows = 30;
+                this.visibleCols = 10;
+                this.editingCell = null;
+                this.resizing = null;
+                
+                this.init();
+            }
+
+            init() {
+                this.container.addEventListener('scroll', this.handleScroll.bind(this));
+                this.grid.addEventListener('click', this.handleCellClick.bind(this));
+                this.grid.addEventListener('dblclick', this.handleCellDoubleClick.bind(this));
+                document.getElementById('formulaInput').addEventListener('keydown', this.handleFormulaInput.bind(this));
+                document.getElementById('searchInput').addEventListener('input', this.handleSearch.bind(this));
+                document.getElementById('jumpInput').addEventListener('keydown', this.handleJumpInput.bind(this));
+                
+                // ペースト処理を追加
+                document.addEventListener('paste', this.handlePaste.bind(this));
+                // キーボードショートカット
+                document.addEventListener('keydown', this.handleKeyDown.bind(this));
+                
+                // リサイズ処理
+                this.grid.addEventListener('mousedown', this.handleResizeStart.bind(this));
+                document.addEventListener('mousemove', this.handleResizeMove.bind(this));
+                document.addEventListener('mouseup', this.handleResizeEnd.bind(this));
+                
+                // 自動保存
+                this.setupAutoSave();
+                
+                this.calculateVisibleCells();
+                window.addEventListener('resize', () => this.calculateVisibleCells());
+                
+                // 初期シートを作成
+                this.addSheet('Sheet1');
+                
+                // 保存データの読み込み
+                this.loadFromStorage();
+            }
+
+            get activeSheet() {
+                return this.sheets[this.activeSheetIndex];
+            }
+
+            addSheet(name) {
+                const sheet = new Sheet(name || `Sheet${this.sheets.length + 1}`);
+                this.sheets.push(sheet);
+                this.renderSheetTabs();
+                this.switchToSheet(this.sheets.length - 1);
+            }
+
+            removeSheet(index) {
+                if (this.sheets.length <= 1) {
+                    alert('最後のシートは削除できません');
+                    return;
+                }
+                
+                this.sheets.splice(index, 1);
+                if (this.activeSheetIndex >= this.sheets.length) {
+                    this.activeSheetIndex = this.sheets.length - 1;
+                }
+                this.renderSheetTabs();
+                this.switchToSheet(this.activeSheetIndex);
+            }
+
+            switchToSheet(index) {
+                if (this.activeSheet) {
+                    this.activeSheet.scrollTop = this.container.scrollTop;
+                    this.activeSheet.scrollLeft = this.container.scrollLeft;
+                }
+                
+                this.activeSheetIndex = index;
+                const sheet = this.activeSheet;
+                
+                this.updateGridSize();
+                this.container.scrollTop = sheet.scrollTop;
+                this.container.scrollLeft = sheet.scrollLeft;
+                
+                this.renderSheetTabs();
+                this.updateInfo();
+                this.render();
+                
+                if (sheet.selectedCell) {
+                    const {row, col} = sheet.selectedCell;
+                    this.updateSelectionDisplay(row, col);
+                }
+            }
+
+            renderSheetTabs() {
+                const tabsContainer = document.getElementById('sheetTabs');
+                const existingTabs = tabsContainer.querySelectorAll('.sheet-tab');
+                existingTabs.forEach(tab => tab.remove());
+                
+                this.sheets.forEach((sheet, index) => {
+                    const tab = document.createElement('div');
+                    tab.className = 'sheet-tab';
+                    if (index === this.activeSheetIndex) {
+                        tab.classList.add('active');
+                    }
+                    
+                    tab.innerHTML = `
+                        <span>${sheet.name}</span>
+                        ${this.sheets.length > 1 ? '<span class="sheet-tab-close">×</span>' : ''}
+                    `;
+                    
+                    tab.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('sheet-tab-close')) {
+                            this.removeSheet(index);
+                        } else {
+                            this.switchToSheet(index);
+                        }
+                    });
+                    
+                    tabsContainer.insertBefore(tab, tabsContainer.lastElementChild);
+                });
+            }
+
+            calculateVisibleCells() {
+                // 常に13列と25行を表示
+                this.visibleRows = 25;
+                this.visibleCols = 13;
+                this.render();
+            }
+
+            setData(rows, cols) {
+                const sheet = this.activeSheet;
+                sheet.rows = rows;
+                sheet.cols = cols;
+                sheet.data = {};
+                
+                // 仮想スクロール用のサイズ設定
+                this.updateGridSize();
+                
+                this.updateInfo();
+                this.render();
+            }
+
+            updateGridSize() {
+                const sheet = this.activeSheet;
+                if (!sheet) return;
+                
+                // 全体のグリッドサイズを計算
+                let totalWidth = this.cellWidth; // 行ヘッダー分
+                let totalHeight = this.cellHeight; // 列ヘッダー分
+                
+                for (let col = 0; col < sheet.cols; col++) {
+                    totalWidth += this.columnWidths[col] || this.cellWidth;
+                }
+                
+                for (let row = 0; row < sheet.rows; row++) {
+                    totalHeight += this.rowHeights[row] || this.cellHeight;
+                }
+                
+                this.grid.style.width = `${totalWidth}px`;
+                this.grid.style.height = `${totalHeight}px`;
+            }
+
+            getColumnLabel(col) {
+                let label = '';
+                while (col >= 0) {
+                    label = String.fromCharCode(65 + (col % 26)) + label;
+                    col = Math.floor(col / 26) - 1;
+                }
+                return label;
+            }
+
+            handleScroll() {
+                requestAnimationFrame(() => this.render());
+            }
+
+            render() {
+                const sheet = this.activeSheet;
+                if (!sheet) return;
+                
+                const scrollTop = this.container.scrollTop;
+                const scrollLeft = this.container.scrollLeft;
+                
+                // 現在のスクロール位置から表示する行と列を計算
+                let currentTop = 0;
+                let startRow = 0;
+                for (let row = 0; row < sheet.rows; row++) {
+                    const height = this.rowHeights[row] || this.cellHeight;
+                    if (currentTop + height > scrollTop) {
+                        startRow = row;
+                        break;
+                    }
+                    currentTop += height;
+                }
+                
+                let currentLeft = 0;
+                let startCol = 0;
+                for (let col = 0; col < sheet.cols; col++) {
+                    const width = this.columnWidths[col] || this.cellWidth;
+                    if (currentLeft + width > scrollLeft) {
+                        startCol = col;
+                        break;
+                    }
+                    currentLeft += width;
+                }
+
+                this.grid.innerHTML = '';
+                
+                // ヘッダー行
+                let xPos = this.cellWidth; // 行ヘッダー分のオフセット
+                for (let col = 0; col <= this.visibleCols && (startCol + col) <= sheet.cols; col++) {
+                    const actualCol = startCol + col - 1;
+                    const width = actualCol === -1 ? this.cellWidth : (this.columnWidths[actualCol] || this.cellWidth);
+                    const cell = this.createCell(-1, actualCol, col === 0 ? '' : this.getColumnLabel(actualCol));
+                    cell.classList.add('header');
+                    if (col === 0) cell.classList.add('row-header');
+                    cell.style.position = 'absolute';
+                    cell.style.top = `${scrollTop}px`;
+                    
+                    if (col === 0) {
+                        cell.style.left = `${scrollLeft}px`;
+                    } else {
+                        // 実際の列の位置を計算
+                        let colPos = this.cellWidth;
+                        for (let c = 0; c < actualCol; c++) {
+                            colPos += this.columnWidths[c] || this.cellWidth;
+                        }
+                        cell.style.left = `${colPos}px`;
+                    }
+                    
+                    this.grid.appendChild(cell);
+                }
+
+                // データ行
+                let yPos = currentTop;
+                for (let r = 0; r < this.visibleRows && (startRow + r) < sheet.rows; r++) {
+                    const row = startRow + r;
+                    const height = this.rowHeights[row] || this.cellHeight;
+                    
+                    // 行の実際の位置を計算
+                    let rowPos = this.cellHeight;
+                    for (let r = 0; r < row; r++) {
+                        rowPos += this.rowHeights[r] || this.cellHeight;
+                    }
+                    
+                    // 行番号
+                    const rowHeader = this.createCell(row, -1, row + 1);
+                    rowHeader.classList.add('row-header');
+                    rowHeader.style.position = 'absolute';
+                    rowHeader.style.top = `${rowPos}px`;
+                    rowHeader.style.left = `${scrollLeft}px`;
+                    this.grid.appendChild(rowHeader);
+
+                    // データセル
+                    for (let c = 0; c < this.visibleCols && (startCol + c) < sheet.cols; c++) {
+                        const col = startCol + c;
+                        const width = this.columnWidths[col] || this.cellWidth;
+                        const value = sheet.getCellValue(row, col);
+                        const cell = this.createCell(row, col, value);
+                        cell.style.position = 'absolute';
+                        cell.style.top = `${rowPos}px`;
+                        
+                        // 列の実際の位置を計算
+                        let colPos = this.cellWidth;
+                        for (let c = 0; c < col; c++) {
+                            colPos += this.columnWidths[c] || this.cellWidth;
+                        }
+                        cell.style.left = `${colPos}px`;
+                        
+                        if (sheet.selectedCell && sheet.selectedCell.row === row && sheet.selectedCell.col === col) {
+                            cell.classList.add('selected');
+                        }
+                        
+                        this.grid.appendChild(cell);
+                    }
+                }
+            }
+
+            createCell(row, col, value) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.textContent = value;
+                cell.dataset.row = row;
+                cell.dataset.col = col;
+                
+                // カスタムサイズまたはデフォルトサイズを適用
+                const width = this.columnWidths[col] || this.cellWidth;
+                const height = this.rowHeights[row] || this.cellHeight;
+                cell.style.width = `${width}px`;
+                cell.style.height = `${height}px`;
+                
+                // ヘッダーセルにリサイズハンドルを追加
+                if (row === -1 && col >= 0) {
+                    const resizeHandle = document.createElement('div');
+                    resizeHandle.className = 'resize-handle-col';
+                    resizeHandle.dataset.col = col;
+                    cell.appendChild(resizeHandle);
+                }
+                if (col === -1 && row >= 0) {
+                    const resizeHandle = document.createElement('div');
+                    resizeHandle.className = 'resize-handle-row';
+                    resizeHandle.dataset.row = row;
+                    cell.appendChild(resizeHandle);
+                }
+                
+                return cell;
+            }
+
+            handleCellClick(e) {
+                const cell = e.target.closest('.cell');
+                if (!cell) return;
+                
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                
+                // ヘッダーセルはクリックしても選択しない
+                if (row === -1 || col === -1) return;
+
+                this.selectCell(row, col);
+                // シングルクリックでは選択のみ（編集モードにはしない）
+            }
+
+            handleCellDoubleClick(e) {
+                const cell = e.target.closest('.cell');
+                if (!cell) return;
+                
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                
+                // ヘッダーセルは編集しない
+                if (row === -1 || col === -1) return;
+                
+                this.editCell(row, col);
+            }
+
+            selectCell(row, col) {
+                const sheet = this.activeSheet;
+                sheet.selectedCell = { row, col };
+                this.render();
+                this.updateSelectionDisplay(row, col);
+            }
+
+            updateSelectionDisplay(row, col) {
+                const sheet = this.activeSheet;
+                const cellLabel = this.getColumnLabel(col) + (row + 1);
+                document.getElementById('selectedCell').textContent = cellLabel;
+                document.getElementById('formulaInput').value = sheet.getCellValue(row, col);
+                document.getElementById('selection').textContent = `選択: ${cellLabel}`;
+            }
+
+            editCell(row, col, initialValue = '') {
+                const cellElement = this.grid.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                if (!cellElement || this.editingCell) return;
+
+                this.editingCell = {row, col};
+                const sheet = this.activeSheet;
+                cellElement.classList.add('editing');
+                const currentValue = initialValue || sheet.getCellValue(row, col);
+                
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'cell-input';
+                input.value = currentValue;
+                
+                cellElement.innerHTML = '';
+                cellElement.appendChild(input);
+                input.focus();
+                
+                // initialValueがある場合は、カーソルを最後に
+                if (initialValue) {
+                    input.setSelectionRange(input.value.length, input.value.length);
+                } else {
+                    input.select();
+                }
+
+                const finishEdit = (save) => {
+                    if (save) {
+                        sheet.setCellValue(row, col, input.value);
+                        if (sheet.selectedCell) {
+                            document.getElementById('formulaInput').value = input.value;
+                        }
+                    }
+                    this.editingCell = null;
+                    this.render();
+                };
+
+                input.addEventListener('blur', () => finishEdit(true));
+                input.addEventListener('keydown', (e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        finishEdit(true);
+                        // 次の行に移動
+                        if (row + 1 < sheet.rows) {
+                            this.selectCell(row + 1, col);
+                        }
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        finishEdit(false);
+                    } else if (e.key === 'Tab') {
+                        e.preventDefault();
+                        finishEdit(true);
+                        // 次の列に移動
+                        if (col + 1 < sheet.cols) {
+                            this.selectCell(row, col + 1);
+                        }
+                    }
+                });
+            }
+
+            updateInfo() {
+                const sheet = this.activeSheet;
+                if (!sheet) return;
+                
+                document.getElementById('rowCount').textContent = sheet.rows.toLocaleString();
+                document.getElementById('colCount').textContent = sheet.cols.toLocaleString();
+                document.getElementById('cellCount').textContent = (sheet.rows * sheet.cols).toLocaleString();
+            }
+
+            handleJumpInput(e) {
+                if (e.key === 'Enter') {
+                    this.jumpToRow();
+                }
+            }
+
+            jumpToRow() {
+                const input = document.getElementById('jumpInput');
+                const rowNum = parseInt(input.value);
+                
+                if (isNaN(rowNum) || rowNum < 1) {
+                    alert('有効な行番号を入力してください');
+                    return;
+                }
+                
+                const sheet = this.activeSheet;
+                const targetRow = rowNum - 1; // 0-indexed
+                
+                if (targetRow >= sheet.rows) {
+                    alert(`行番号は${sheet.rows}以下である必要があります`);
+                    return;
+                }
+                
+                // 指定行にスクロール
+                const scrollTop = targetRow * (this.rowHeights[targetRow] || this.cellHeight);
+                this.container.scrollTop = scrollTop;
+                
+                // A列を選択
+                this.selectCell(targetRow, 0);
+                
+                document.getElementById('status').textContent = `${rowNum}行目にジャンプしました`;
+                input.value = '';
+            }
+
+            handleResizeStart(e) {
+                const resizeHandleCol = e.target.closest('.resize-handle-col');
+                const resizeHandleRow = e.target.closest('.resize-handle-row');
+                
+                if (resizeHandleCol) {
+                    e.preventDefault();
+                    const col = parseInt(resizeHandleCol.dataset.col);
+                    const currentWidth = this.columnWidths[col] || this.cellWidth;
+                    this.resizing = {
+                        type: 'col',
+                        index: col,
+                        startX: e.clientX,
+                        startSize: currentWidth
+                    };
+                } else if (resizeHandleRow) {
+                    e.preventDefault();
+                    const row = parseInt(resizeHandleRow.dataset.row);
+                    const currentHeight = this.rowHeights[row] || this.cellHeight;
+                    this.resizing = {
+                        type: 'row',
+                        index: row,
+                        startY: e.clientY,
+                        startSize: currentHeight
+                    };
+                }
+            }
+
+            handleResizeMove(e) {
+                if (!this.resizing) return;
+                
+                if (this.resizing.type === 'col') {
+                    const delta = e.clientX - this.resizing.startX;
+                    const newWidth = Math.max(50, this.resizing.startSize + delta);
+                    this.columnWidths[this.resizing.index] = newWidth;
+                    
+                    // 即座に反映
+                    this.updateGridSize();
+                    this.render();
+                } else if (this.resizing.type === 'row') {
+                    const delta = e.clientY - this.resizing.startY;
+                    const newHeight = Math.max(20, this.resizing.startSize + delta);
+                    this.rowHeights[this.resizing.index] = newHeight;
+                    
+                    // 即座に反映
+                    this.updateGridSize();
+                    this.render();
+                }
+            }
+
+            handleResizeEnd() {
+                if (this.resizing) {
+                    this.resizing = null;
+                    document.getElementById('status').textContent = 'サイズ変更完了';
+                }
+            }
+
+            setupAutoSave() {
+                // 5秒ごとに自動保存をチェック
+                setInterval(() => {
+                    const sheet = this.activeSheet;
+                    if (sheet && Date.now() - sheet.lastSaved < 5000) {
+                        this.saveToStorage();
+                    }
+                }, 5000);
+            }
+
+            saveToStorage() {
+                const data = {
+                    sheets: this.sheets.map(sheet => ({
+                        name: sheet.name,
+                        data: sheet.data,
+                        rows: sheet.rows,
+                        cols: sheet.cols,
+                        history: sheet.history,
+                        historyIndex: sheet.historyIndex
+                    })),
+                    activeSheetIndex: this.activeSheetIndex,
+                    columnWidths: this.columnWidths,
+                    rowHeights: this.rowHeights,
+                    lastSaved: Date.now()
+                };
+                
+                // localStorageは使えないので、メモリに保存
+                this.savedData = JSON.stringify(data);
+                document.getElementById('status').textContent = `保存しました (${new Date().toLocaleTimeString()})`;
+            }
+
+            loadFromStorage() {
+                // メモリから読み込み（実際のアプリではlocalStorageやサーバーを使用）
+                if (this.savedData) {
+                    try {
+                        const data = JSON.parse(this.savedData);
+                        this.sheets = data.sheets.map(sheetData => {
+                            const sheet = new Sheet(sheetData.name);
+                            sheet.data = sheetData.data;
+                            sheet.rows = sheetData.rows;
+                            sheet.cols = sheetData.cols;
+                            sheet.history = sheetData.history || [];
+                            sheet.historyIndex = sheetData.historyIndex || -1;
+                            return sheet;
+                        });
+                        this.activeSheetIndex = data.activeSheetIndex;
+                        this.columnWidths = data.columnWidths || {};
+                        this.rowHeights = data.rowHeights || {};
+                        
+                        this.renderSheetTabs();
+                        this.updateGridSize();
+                        this.render();
+                        document.getElementById('status').textContent = 'データを読み込みました';
+                    } catch (e) {
+                        console.error('データの読み込みに失敗しました', e);
+                    }
+                }
+            }
+
+            undo() {
+                const sheet = this.activeSheet;
+                if (!sheet) return;
+                
+                const action = sheet.undo();
+                if (action) {
+                    this.render();
+                    document.getElementById('status').textContent = '元に戻しました';
+                }
+            }
+
+            redo() {
+                const sheet = this.activeSheet;
+                if (!sheet) return;
+                
+                const action = sheet.redo();
+                if (action) {
+                    this.render();
+                    document.getElementById('status').textContent = 'やり直しました';
+                }
+            }
+
+            handleFormulaInput(e) {
+                if (e.key === 'Enter') {
+                    const sheet = this.activeSheet;
+                    if (sheet.selectedCell) {
+                        const value = e.target.value;
+                        sheet.setCellValue(sheet.selectedCell.row, sheet.selectedCell.col, value);
+                        this.render();
+                        
+                        // 次のセルに移動
+                        const nextRow = sheet.selectedCell.row + 1;
+                        if (nextRow < sheet.rows) {
+                            this.selectCell(nextRow, sheet.selectedCell.col);
+                        }
+                    }
+                }
+            }
+
+            handleSearch(e) {
+                const searchTerm = e.target.value.toLowerCase();
+                if (!searchTerm) {
+                    this.render();
+                    return;
+                }
+
+                const sheet = this.activeSheet;
+                document.getElementById('status').textContent = `検索中: "${searchTerm}"`;
+                
+                // 簡易検索実装
+                for (let row = 0; row < sheet.rows; row++) {
+                    for (let col = 0; col < sheet.cols; col++) {
+                        const value = sheet.getCellValue(row, col);
+                        if (value && value.toString().toLowerCase().includes(searchTerm)) {
+                            // 見つかったセルにスクロール
+                            this.container.scrollTop = row * this.cellHeight;
+                            this.container.scrollLeft = col * this.cellWidth;
+                            this.selectCell(row, col);
+                            document.getElementById('status').textContent = `検索結果: ${this.getColumnLabel(col)}${row + 1}`;
+                            return;
+                        }
+                    }
+                }
+                
+                document.getElementById('status').textContent = `"${searchTerm}" は見つかりませんでした`;
+            }
+
+            handleKeyDown(e) {
+                const sheet = this.activeSheet;
+                if (!sheet || !sheet.selectedCell) return;
+                
+                // Ctrl+Z: 元に戻す
+                if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.undo();
+                }
+                // Ctrl+Y または Ctrl+Shift+Z: やり直し
+                else if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+                    e.preventDefault();
+                    this.redo();
+                }
+                // Ctrl+S: 保存
+                else if (e.ctrlKey && e.key === 's') {
+                    e.preventDefault();
+                    this.saveToStorage();
+                }
+                // F2キーで編集開始
+                else if (e.key === 'F2') {
+                    e.preventDefault();
+                    this.editCell(sheet.selectedCell.row, sheet.selectedCell.col);
+                }
+                // 矢印キーでセル移動
+                else if (e.key === 'ArrowUp' && sheet.selectedCell.row > 0) {
+                    e.preventDefault();
+                    this.selectCell(sheet.selectedCell.row - 1, sheet.selectedCell.col);
+                }
+                else if (e.key === 'ArrowDown' && sheet.selectedCell.row < sheet.rows - 1) {
+                    e.preventDefault();
+                    this.selectCell(sheet.selectedCell.row + 1, sheet.selectedCell.col);
+                }
+                else if (e.key === 'ArrowLeft' && sheet.selectedCell.col > 0) {
+                    e.preventDefault();
+                    this.selectCell(sheet.selectedCell.row, sheet.selectedCell.col - 1);
+                }
+                else if (e.key === 'ArrowRight' && sheet.selectedCell.col < sheet.cols - 1) {
+                    e.preventDefault();
+                    this.selectCell(sheet.selectedCell.row, sheet.selectedCell.col + 1);
+                }
+                // Enterキーで編集開始
+                else if (e.key === 'Enter' && !this.editingCell) {
+                    e.preventDefault();
+                    this.editCell(sheet.selectedCell.row, sheet.selectedCell.col);
+                }
+                // 文字キーで直接編集開始
+                else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey && !this.editingCell) {
+                    this.editCell(sheet.selectedCell.row, sheet.selectedCell.col, e.key);
+                }
+            }
+
+            handlePaste(e) {
+                const sheet = this.activeSheet;
+                if (!sheet || !sheet.selectedCell || this.editingCell) return;
+                
+                // フォーカスが他の入力要素にある場合は処理しない
+                if (document.activeElement.tagName === 'INPUT' && document.activeElement !== document.getElementById('formulaInput')) {
+                    return;
+                }
+                
+                e.preventDefault();
+                const pastedData = e.clipboardData.getData('text/plain');
+                
+                // データを行と列に分割
+                const rows = pastedData.split(/\r?\n/);
+                const startRow = sheet.selectedCell.row;
+                const startCol = sheet.selectedCell.col;
+                
+                rows.forEach((rowData, rowIndex) => {
+                    if (rowData.trim() === '') return;
+                    
+                    // タブ区切りを優先、なければスペース2つ以上で分割
+                    const cells = rowData.includes('\t') 
+                        ? rowData.split('\t')
+                        : rowData.split(/\s{2,}/);
+                    
+                    cells.forEach((cellData, colIndex) => {
+                        const targetRow = startRow + rowIndex;
+                        const targetCol = startCol + colIndex;
+                        
+                        if (targetRow < sheet.rows && targetCol < sheet.cols) {
+                            sheet.setCellValue(targetRow, targetCol, cellData.trim());
+                        }
+                    });
+                });
+                
+                this.render();
+                document.getElementById('status').textContent = `${rows.length}行のデータを貼り付けました`;
+            }
+        }
+
+        // グローバル変数とイベントハンドラー
+        let spreadsheet;
+
+        function init() {
+            const container = document.getElementById('spreadsheet');
+            spreadsheet = new VirtualSpreadsheet(container);
+        }
+
+        function addNewSheet() {
+            spreadsheet.addSheet();
+        }
+
+        function jumpToRow() {
+            spreadsheet.jumpToRow();
+        }
+
+        async function generateData(rowCount) {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'flex';
+            document.getElementById('status').textContent = `${rowCount.toLocaleString()}件のデータを生成中...`;
+
+            // 非同期でデータ生成をシミュレート
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const colCount = 26; // A-Z列
+            spreadsheet.setData(rowCount, colCount);
+
+            // サンプルデータを一部だけ生成（パフォーマンスのため）
+            const sheet = spreadsheet.activeSheet;
+            const sampleSize = Math.min(1000, rowCount);
+            for (let i = 0; i < sampleSize; i++) {
+                const row = Math.floor(Math.random() * rowCount);
+                const col = Math.floor(Math.random() * colCount);
+                const value = `Data_${row}_${col}`;
+                sheet.setCellValue(row, col, value);
+            }
+
+            loading.style.display = 'none';
+            document.getElementById('status').textContent = `${rowCount.toLocaleString()}件のデータを生成しました`;
+        }
+
+        function clearData() {
+            spreadsheet.setData(100, 26);
+            document.getElementById('status').textContent = 'データをクリアしました';
+        }
+
+        function importData() {
+            document.getElementById('fileInput').click();
+        }
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const loading = document.getElementById('loading');
+            loading.style.display = 'flex';
+
+            try {
+                const text = await file.text();
+                
+                if (file.name.endsWith('.json')) {
+                    // JSON形式の処理
+                    const data = JSON.parse(text);
+                    
+                    if (Array.isArray(data)) {
+                        // セル単位のデータ
+                        data.forEach(item => {
+                            if (item.row !== undefined && item.col !== undefined) {
+                                spreadsheet.activeSheet.setCellValue(item.row, item.col, item.value);
+                            }
+                        });
+                    } else if (data.cells) {
+                        // セルデータが含まれている場合
+                        data.cells.forEach(item => {
+                            spreadsheet.activeSheet.setCellValue(item.row, item.col, item.value);
+                        });
+                    } else if (data.rows) {
+                        // 行データ形式
+                        data.rows.forEach((row, rowIndex) => {
+                            row.forEach((value, colIndex) => {
+                                spreadsheet.activeSheet.setCellValue(rowIndex, colIndex, value);
+                            });
+                        });
+                    }
+                    
+                    document.getElementById('status').textContent = `JSONデータを読み込みました (${file.name})`;
+                    
+                } else if (file.name.endsWith('.csv')) {
+                    // CSV形式の処理
+                    const rows = text.split(/\r?\n/);
+                    rows.forEach((row, rowIndex) => {
+                        if (row.trim()) {
+                            const cells = row.split(/\t|,/);
+                            cells.forEach((cell, colIndex) => {
+                                spreadsheet.activeSheet.setCellValue(rowIndex, colIndex, cell.trim());
+                            });
+                        }
+                    });
+                    
+                    document.getElementById('status').textContent = `CSVデータを読み込みました (${file.name})`;
+                }
+                
+                spreadsheet.render();
+                spreadsheet.saveToStorage();
+                
+            } catch (error) {
+                console.error('ファイルの読み込みエラー:', error);
+                alert('ファイルの読み込みに失敗しました: ' + error.message);
+            } finally {
+                loading.style.display = 'none';
+                event.target.value = ''; // 同じファイルを再選択できるようにリセット
+            }
+        }
+
+        // Pythonからのデータを自動取得する関数（オプション）
+        async function fetchPythonData() {
+            try {
+                // ローカルサーバーやAPIエンドポイントから取得
+                const response = await fetch('http://localhost:8000/scraping-data');
+                const data = await response.json();
+                
+                // データをスプレッドシートに反映
+                data.forEach(item => {
+                    spreadsheet.activeSheet.setCellValue(item.row, item.col, item.value);
+                });
+                
+                spreadsheet.render();
+                document.getElementById('status').textContent = 'スクレイピングデータを取得しました';
+                
+            } catch (error) {
+                console.error('データ取得エラー:', error);
+            }
+        }
+
+        // 初期化
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
